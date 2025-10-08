@@ -11,6 +11,15 @@ API_KEY = 'M2X011d1L0JrGq0LoLTaHCQnsR6Xv2FNwbCGXZttJP9h90BBtKCSH7ThGRlLdgdu3ubFI
 ENDPOINT = 'https://api.yelp.com/v3/businesses/search'
 HEADERS = {'Authorization': f'bearer {API_KEY}'}
 
+# --- AWS OpenSearch (Elasticsearch) Configuration ---
+# TODO: Paste your OpenSearch domain endpoint URL here
+ES_ENDPOINT = 'https://search-restaurants-qyfi2lwer4mu6iwulcpu7he4jq.us-east-1.es.amazonaws.com'
+ES_INDEX = 'restaurants'
+ES_TYPE = '_doc'  # For OpenSearch Service, the type is typically '_doc'
+ES_USERNAME = 'admin-user'  # Replace with your OpenSearch username
+ES_PASSWORD = 'AdvaitNYU*12345'  # Replace with your OpenSearch password
+ES_AUTH = (ES_USERNAME, ES_PASSWORD)
+
 # --- Define Search Parameters ---
 # Define at least 5 cuisines as required by the assignment
 CUISINES = ['chinese', 'japanese', 'continental', 'mexican', 'indian']  
@@ -79,6 +88,29 @@ def scrape_yelp_data():
                         # Save the item to DynamoDB
                         table.put_item(Item=item)
 
+                        # Prepare the document for Elasticsearch
+                        es_doc = {
+                            'RestaurantID': business.get('id'),
+                            'Cuisine': cuisine
+                        }
+
+
+                        # Construct the URL for the Elasticsearch document
+                        es_url = f"{ES_ENDPOINT}/{ES_INDEX}/{ES_TYPE}/{business.get('id')}"
+                        es_headers = {"Content-Type": "application/json"}
+
+                        # Send the data to Elasticsearch
+                        try:
+                            es_response = requests.put(
+                                            es_url, 
+                                            data=json.dumps(es_doc), 
+                                            headers=es_headers,
+                                            auth=(ES_USERNAME, ES_PASSWORD) # Add this auth parameter
+                                        )
+                            es_response.raise_for_status()
+                        except Exception as e:
+                            print(f"Error indexing to Elasticsearch: {e}")
+
                 # Be respectful of the API rate limit
                 time.sleep(0.5)
 
@@ -88,8 +120,9 @@ def scrape_yelp_data():
             except Exception as e:
                 print(f"An error occurred: {e}")
                 break
-
-            print(f"--- Scraping complete! Total unique restaurants found: {len(unique_restaurant_ids)} ---")
+            
+        
+        print(f"--- Scraping complete for {cuisine}! Total unique restaurants found so far: {len(unique_restaurant_ids)} ---")
 
 if __name__ == '__main__':
     scrape_yelp_data()
