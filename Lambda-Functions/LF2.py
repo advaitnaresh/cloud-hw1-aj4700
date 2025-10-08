@@ -5,13 +5,12 @@ import base64         # Needed for handling the password
 import random
 
 # --- Configuration ---
-# TODO: Fill these in with your specific details
-ES_HOST = 'search-restaurants-qyfi2lwer4mu6iwulcpu7he4jq.us-east-1.es.amazonaws.com' # e.g., search-restaurants-....es.amazonaws.com (WITHOUT https://)
+ES_HOST = 'search-restaurants-qyfi2lwer4mu6iwulcpu7he4jq.us-east-1.es.amazonaws.com'
 ES_USERNAME = 'admin-user'
 ES_PASSWORD = 'AdvaitNYU*12345'
 SQS_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/584156787058/Q1'
 SENDER_EMAIL = 'aj4700@nyu.edu'
-DYNAMODB_TABLE_NAME = 'RestaurantConciergeTableAJ4700' # Or the name you chose
+DYNAMODB_TABLE_NAME = 'RestaurantConciergeTableAJ4700'
 
 def lambda_handler(event, context):
     # --- 1. Poll SQS for a message ---
@@ -35,15 +34,15 @@ def lambda_handler(event, context):
         print(f"Error receiving from SQS: {e}")
         return
 
-    # --- 2. Query OpenSearch for restaurant IDs using urllib ---
+    # --- 2. Query OpenSearch for a larger batch of restaurant IDs ---
     es_url = f"https://{ES_HOST}/restaurants/_search"
-    query = {"size": 3, "query": {"match": {"Cuisine": cuisine}}}
+    
+    # MODIFICATION: Changed "size" from 3 to 50 to get a larger pool of restaurants
+    query = {"size": 50, "query": {"match": {"Cuisine": cuisine}}}
     query_bytes = json.dumps(query).encode('utf-8')
 
-    # Create the request object
     req = urllib.request.Request(es_url, data=query_bytes, headers={'Content-Type': 'application/json'})
     
-    # Handle Basic Authentication
     credentials = f"{ES_USERNAME}:{ES_PASSWORD}"
     encoded_credentials = base64.b64encode(credentials.encode()).decode()
     req.add_header('Authorization', f"Basic {encoded_credentials}")
@@ -53,11 +52,17 @@ def lambda_handler(event, context):
             es_data = json.loads(response.read().decode())
             
         hits = es_data.get('hits', {}).get('hits', [])
-        restaurant_ids = [hit['_source']['RestaurantID'] for hit in hits]
 
-        if not restaurant_ids:
+        if not hits:
             print("No restaurants found for this cuisine.")
             return
+
+        # MODIFICATION: Use random.sample to pick up to 3 unique suggestions from the results
+        number_to_suggest = min(3, len(hits))
+        random_hits = random.sample(hits, number_to_suggest)
+        
+        # Get the IDs from the new random list
+        restaurant_ids = [hit['_source']['RestaurantID'] for hit in random_hits]
 
     except Exception as e:
         print(f"Error querying OpenSearch: {e}")
