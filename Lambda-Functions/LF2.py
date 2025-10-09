@@ -97,7 +97,10 @@ def lambda_handler(event, context):
         print("Email sent successfully!")
     except Exception as e:
         print(f"Error sending email: {e}")
-        return
+        # Re-raise the exception to signal a failure to Lambda
+        # This prevents the message from being deleted and allows SQS to retry
+        # Re-entry -> DLQ
+        raise e
         
     # --- 5. Delete the message from SQS ---
     try:
